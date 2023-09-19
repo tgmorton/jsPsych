@@ -48,6 +48,21 @@ const info = <const>{
       type: ParameterType.BOOL,
       default: false,
     },
+    /** Whether or not to use the voice-key functionality. */
+    use_voice_key: {
+      type: ParameterType.BOOL,
+      default: false,
+    },
+    /** The amplitude threshold for the voice-key. */
+    amplitude_threshold: {
+      type: ParameterType.FLOAT,
+      default: 0.1,
+    },
+    /** The duration of the timer that starts when the amplitude threshold is surpassed. */
+    timer_duration: {
+      type: ParameterType.INT,
+      default: 650,
+    },
   },
 };
 
@@ -106,6 +121,10 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     if (el) {
       el.style.visibility = "hidden";
     }
+  }
+
+  private changeDisplay(display_element: HTMLElement, newContent: string) {
+    display_element.innerHTML = newContent;
   }
 
   private addButtonEvent(display_element, trial) {

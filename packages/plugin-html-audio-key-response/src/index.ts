@@ -87,6 +87,11 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
   private stop_event_handler;
   private data_available_handler;
   private recorded_data_chunks = [];
+  private analyzer: any; // Add this property to store the analyzer
+  private dataArray: any; // Add this property to store the data array
+  private bufferLength: any; // Add this property to store the buffer length
+  private amplitudeThreshold: any; // Add this property to store the amplitude threshold
+  private timeout: any;
 
   constructor(private jsPsych: JsPsych) {}
 
@@ -203,8 +208,55 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     this.recorder.addEventListener("start", this.start_event_handler);
   }
 
+  private logAmplitudeUntilThresholdReached() {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+
+      const logAmplitude = () => {
+        // Get the audio data from the analyzer
+        this.analyzer.getByteTimeDomainData(this.dataArray);
+
+        // Calculate the amplitude
+        let sum = 0;
+        for (let i = 0; i < this.bufferLength; i++) {
+          const value = (this.dataArray[i] - 128) / 128;
+          sum += value * value;
+        }
+        const amplitude = Math.sqrt(sum / this.bufferLength);
+
+        // If the amplitude exceeds the threshold, resolve the promise
+        if (amplitude > this.amplitudeThreshold) {
+          resolve('Amplitude threshold reached');
+          return;
+        }
+
+        // If the timeout has been reached, reject the promise
+        if (Date.now() - startTime > this.timeout) {
+          reject('Timeout reached');
+          return;
+        }
+
+        // Schedule the next log
+        this.jsPsych.pluginAPI.setTimeout(logAmplitude, 100); // Adjust the time interval as needed (in milliseconds)
+      };
+
+      logAmplitude();
+    });
+  }
+
   private startRecording() {
+    // Initialize the analyzer
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(this.recorder.stream);
+    this.analyzer = audioContext.createAnalyser();
+    source.connect(this.analyzer);
+    this.bufferLength = this.analyzer.frequencyBinCount
+    this.dataArray = new Uint8Array(this.bufferLength);
+    
     this.recorder.start();
+    this.logAmplitudeUntilThresholdReached()
+      .then(message => console.log(message))
+      .catch(error => console.error(error));
   }
 
   private stopRecording() {

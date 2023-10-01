@@ -91,6 +91,7 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
   private dataArray: any; // Add this property to store the data array
   private bufferLength: any; // Add this property to store the buffer length
   private amplitudeThreshold: any; // Add this property to store the amplitude threshold
+  private startTime: any; // Add this property to store the start time
   private timeout: any;
 
   constructor(private jsPsych: JsPsych) {}
@@ -100,7 +101,7 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
 
     this.setupRecordingEvents(display_element, trial);
 
-    this.startRecording();
+    this.startRecording(trial);
   }
 
   private showDisplay(display_element, trial) {
@@ -208,14 +209,22 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     this.recorder.addEventListener("start", this.start_event_handler);
   }
 
-  private logAmplitudeUntilThresholdReached() {
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
+  private injectInvertColorsCSS() {
+    const style = document.createElement('style');
+    style.textContent = `
+      body {
+        filter: invert(1);
+      }
+    `;
+    document.head.append(style);
+  }
 
+  private logAmplitudeUntilThresholdReached(trial) {
+    return new Promise((resolve, reject) => {
       const logAmplitude = () => {
         // Get the audio data from the analyzer
         this.analyzer.getByteTimeDomainData(this.dataArray);
-
+  
         // Calculate the amplitude
         let sum = 0;
         for (let i = 0; i < this.bufferLength; i++) {
@@ -223,28 +232,31 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
           sum += value * value;
         }
         const amplitude = Math.sqrt(sum / this.bufferLength);
-
+        //console.log(trial.amplitude_threshold);
+  
         // If the amplitude exceeds the threshold, resolve the promise
-        if (amplitude > this.amplitudeThreshold) {
+        if (amplitude > trial.amplitude_threshold) {
+          const endTime = performance.now(); // Store the end time
+          console.log(`Time from start to amplitude log: ${endTime - this.startTime} ms`);
           resolve('Amplitude threshold reached');
           return;
         }
-
+  
         // If the timeout has been reached, reject the promise
-        if (Date.now() - startTime > this.timeout) {
+        if (Date.now() - this.startTime > this.timeout) {
           reject('Timeout reached');
           return;
         }
-
+  
         // Schedule the next log
-        this.jsPsych.pluginAPI.setTimeout(logAmplitude, 100); // Adjust the time interval as needed (in milliseconds)
+        this.jsPsych.pluginAPI.setTimeout(logAmplitude, 5); // Adjust the time interval as needed (in milliseconds)
       };
-
+  
       logAmplitude();
     });
   }
 
-  private startRecording() {
+  private startRecording(trial) {
     // Initialize the analyzer
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(this.recorder.stream);
@@ -254,8 +266,13 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     this.dataArray = new Uint8Array(this.bufferLength);
     
     this.recorder.start();
-    this.logAmplitudeUntilThresholdReached()
-      .then(message => console.log(message))
+    this.startTime = performance.now(); // Store the start time
+    this.logAmplitudeUntilThresholdReached(trial)
+      .then(
+        message => {
+          console.log(message);
+        }
+        )
       .catch(error => console.error(error));
   }
 
@@ -276,7 +293,7 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     display_element.querySelector("#record-again").addEventListener("click", () => {
       // release object url to save memory
       URL.revokeObjectURL(this.audio_url);
-      this.startRecording();
+      this.startRecording(trial);
     });
     display_element.querySelector("#continue").addEventListener("click", () => {
       this.endTrial(display_element, trial);

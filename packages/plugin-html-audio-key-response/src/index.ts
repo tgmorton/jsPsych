@@ -63,6 +63,16 @@ const info = <const>{
       type: ParameterType.INT,
       default: 650,
     },
+    alert_sound: {
+      type: ParameterType.AUDIO,
+      pretty_name: "alert_sound Sound",
+      default: undefined,
+    },
+    alert_image: {
+      type: ParameterType.IMAGE,
+      pretty_name: "Alert Image",
+      default: undefined,
+    }
   },
 };
 
@@ -93,10 +103,35 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
   private amplitudeThreshold: any; // Add this property to store the amplitude threshold
   private startTime: any; // Add this property to store the start time
   private timeout: any;
+  private alert_sound;
 
   constructor(private jsPsych: JsPsych) {}
 
   trial(display_element: HTMLElement, trial: TrialType<Info>) {
+    var startTime;
+
+    var context = this.jsPsych.pluginAPI.audioContext();
+
+    // load alert_sound file
+    this.jsPsych.pluginAPI
+      .getAudioBuffer(trial.alert_sound)
+      .then((buffer) => {
+        if (context !== null) {
+          this.alert_sound = context.createBufferSource();
+          this.alert_sound.buffer = buffer;
+          this.alert_sound.connect(context.destination);
+        } else {
+          this.alert_sound = buffer;
+          this.alert_sound.currentTime = 0;
+        }
+      })
+      .catch((err) => {
+        console.error(
+          `Failed to load audio file "${trial.stimulus}". Try checking the file path. We recommend using the preload plugin to load audio files.`
+        );
+        console.error(err);
+      });
+    
     this.recorder = this.jsPsych.pluginAPI.getMicrophoneRecorder();
 
     this.setupRecordingEvents(display_element, trial);
@@ -114,7 +149,10 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     ro.observe(display_element);
 
     let html = `<div id="jspsych-html-audio-response-stimulus">${trial.stimulus}</div>`;
-
+    html += `<div id="alert-image" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; ">
+                <img src="${trial.alert_image}" style="width: 250px;">
+             </div>`;
+    
     if (trial.show_done_button) {
       html += `<p><button class="jspsych-btn" id="finish-trial">${trial.done_button_label}</button></p>`;
     }
@@ -126,6 +164,17 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     const el: HTMLElement = display_element.querySelector("#jspsych-html-audio-response-stimulus");
     if (el) {
       el.style.visibility = "hidden";
+    }
+    const alertImage: HTMLElement = document.getElementById("alert-image");
+    if (alertImage) {
+      alertImage.style.opacity = "0";
+    }
+  }
+
+  private showAlertImage() {
+    const alertImage: HTMLElement = document.getElementById("alert-image");
+    if (alertImage) {
+      alertImage.style.opacity = "1";
     }
   }
 
@@ -256,6 +305,16 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     });
   }
 
+  private playAlertSound() {
+    if (this.alert_sound) {
+      if (this.alert_sound instanceof AudioBufferSourceNode) {
+        this.alert_sound.start();
+      } else {
+        this.alert_sound.play();
+      }
+    }
+  }
+
   private startRecording(trial) {
     // Initialize the analyzer
     const audioContext = new AudioContext();
@@ -270,6 +329,8 @@ class HtmlAudioResponsePlugin implements JsPsychPlugin<Info> {
     this.logAmplitudeUntilThresholdReached(trial)
       .then(
         message => {
+          this.showAlertImage();
+          this.playAlertSound();
           console.log(message);
         }
         )

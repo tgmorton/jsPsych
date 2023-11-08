@@ -1,5 +1,5 @@
 {
-  "name": "@tompsych/plugin-image-keyboard-response-logger",
+  "name": "@tmpsych/plugin-image-keyboard-response-logger",
   "version": "0.0.1",
   "description": "jsPsych plugin for displaying a stimulus and getting a keyboard response with verbose logging and event management",
   "type": "module",

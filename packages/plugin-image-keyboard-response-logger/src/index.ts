@@ -623,7 +623,7 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
           buffer = "";
           if (triggered) {
             this.changeImageOnCanvas(trial, canvas, trial.stimulus_post);
-            eventTime = startTime - performance.now();
+            eventTime = performance.now() - startTime;
           }
         }
         else { 

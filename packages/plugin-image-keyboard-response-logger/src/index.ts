@@ -110,7 +110,55 @@ const info = <const>{
       default: 750,
       description: 'How long to display correct feedback'
     },
-    }
+    placeholder: {
+      type: ParameterType.BOOL,
+      pretty_name: 'Placeholder',
+      default: false,
+      description: 'Whether to display a placeholder'
+    },
+    prompt_before: {
+      type: ParameterType.BOOL,
+      pretty_name: 'Prompt before',
+      default: false,
+      description: 'Whether to display the prompt before the stimulus'
+    },
+    feedback_height: {
+      type: ParameterType.INT,
+      pretty_name: 'Feedback height',
+      default: 50,
+      description: 'Height of the feedback canvas'
+    },
+    extra_width: {
+      type: ParameterType.INT,
+      pretty_name: 'Extra width',
+      default: 0,
+      description: 'Extra width of the feedback canvas'
+    },
+    dual_trial: {
+      type: ParameterType.BOOL,
+      pretty_name: "Dual trial",
+      default: false,
+      description: 'Whether to display stimulus and stimulus post next to each other'
+    },
+    prompt_post: {
+      type: ParameterType.HTML_STRING,
+      pretty_name: "Prompt post",
+      default: null,
+      description: 'Prompt to be displayed after the stimulus post'
+    },
+    target_num: {
+      type: ParameterType.INT,
+      pretty_name: "Target Image",
+      options: [0, 1],
+      default: 0,
+      description: 'Dual task target image'
+    },
+    selection_delay: {
+      type: ParameterType.INT,
+      pretty_name: "Selection delay",
+      default: 500,
+      description: 'Time to wait before marking target'
+    },
   },
 };
 
@@ -180,12 +228,172 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
       ctx.drawImage(img, 0, 0, width, height);
       image_drawn = true;
     }
-  
-    if (trial.prompt !== null) {
-      display_element.insertAdjacentHTML("beforeend", trial.prompt);
-    }
+
+      // Create a div for the prompt
+      let promptDiv = document.createElement('div');
+
+      // Set the prompt text
+      if (trial.prompt !== null) {
+        promptDiv.innerHTML = trial.prompt;
+      }
+
+      // Prepend the prompt div to the display element
+      if (trial.prompt_before) {
+        display_element.insertBefore(promptDiv, display_element.firstChild);
+      }
+      else {
+        display_element.appendChild(promptDiv);
+      }
+      
+
 
     return canvas;
+  }
+
+  renderImageOnCanvasDualTrial(trial, display_element, image_drawn = false) {
+    // first clear the display element
+    while (display_element.firstChild) {
+      display_element.removeChild(display_element.firstChild);
+    }
+  
+    // create a container for the canvases
+    var canvasContainer = document.createElement("div");
+    canvasContainer.style.display = "flex";
+    canvasContainer.style.justifyContent = "center";
+    canvasContainer.style.alignItems = "center";
+    canvasContainer.style.flexDirection = "column";
+
+    // create canvas element and image for the first stimulus
+    var canvas = document.createElement("canvas");
+    canvas.id = "jspsych-image-keyboard-response-stimulus";
+    canvas.style.margin = "0";
+    canvas.style.padding = "0";
+    canvas.style.display = "inline-block"; // add this line
+    var ctx = canvas.getContext("2d");
+    var img = new Image();
+    var height, width;
+
+    img.onload = () => {
+      if (!image_drawn) {
+        getHeightWidth();
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+    };
+    img.src = trial.stimulus;
+  
+    // create canvas element and image for the post stimulus
+    var canvasPost = document.createElement("canvas");
+    canvasPost.id = "jspsych-image-keyboard-response-stimulus-post";
+    canvasPost.style.margin = "0";
+    canvasPost.style.padding = "0";
+    canvasPost.style.display = "inline-block"; // add this line
+    var ctxPost = canvasPost.getContext("2d");
+    var imgPost = new Image();
+  
+    imgPost.onload = () => {
+      if (!image_drawn) {
+        getHeightWidthPost();
+        ctxPost.drawImage(imgPost, 0, 0, width, height);
+      }
+    };
+    imgPost.src = trial.stimulus_post;
+  
+    // create canvas for the text input
+    var textCanvas = document.createElement("canvas");
+    // textCanvas.id = "jspsych-image-keyboard-response-text";
+    // textCanvas.style.margin = "0";
+    // textCanvas.style.padding = "0";
+    // var textCtx = textCanvas.getContext("2d");
+  
+    // add the canvases to the display element
+    display_element.appendChild(canvas);
+    display_element.appendChild(canvasPost);
+    // add the container to the display element
+    display_element.appendChild(canvasContainer);
+    //canvasContainer.appendChild(textCanvas);
+    // remove jspsych-image-keyboard-response-text
+
+    // Create a div for the prompts
+    let promptDiv = document.createElement('div');
+    promptDiv.style.display = "flex";
+    promptDiv.style.justifyContent = "space-between";
+
+    // Create a div for the first prompt and set the text
+    let firstPrompt = document.createElement('div');
+    if (trial.prompt !== null) {
+      firstPrompt.innerHTML = trial.prompt;
+    }
+    promptDiv.appendChild(firstPrompt);
+
+    // Create a div for the post prompt and set the text
+    let postPrompt = document.createElement('div');
+    if (trial.prompt_post !== null) {
+      postPrompt.innerHTML = trial.prompt_post;
+    }
+    promptDiv.appendChild(postPrompt);
+
+    promptDiv.style.width = `${canvas.width + 100}px`;
+    promptDiv.style.marginLeft = `${canvas.width-100}px`;
+
+    // Append the prompt div to the display element
+    // Prepend or append the prompt div to the display element based on the value of prompt_before
+    if (trial.prompt_before) {
+      display_element.insertBefore(promptDiv, canvas);
+    } else {
+      display_element.appendChild(promptDiv);
+    }
+
+    setTimeout(() => {
+      if (trial.target_num === 0) {
+        firstPrompt.style.color = "green";
+      } else if (trial.target_num === 1) {
+        postPrompt.style.color = "green";
+      }
+    }, trial.selection_delay);
+  
+    // Adjust the size of the canvas based on the image's aspect ratio
+    const getHeightWidth = () => {
+      if (trial.stimulus_height !== null) {
+        height = trial.stimulus_height;
+        if (trial.stimulus_width == null && trial.maintain_aspect_ratio) {
+          width = img.naturalWidth * (trial.stimulus_height / img.naturalHeight);
+        }
+      } else {
+        height = img.naturalHeight;
+      }
+      if (trial.stimulus_width !== null) {
+        width = trial.stimulus_width;
+        if (trial.stimulus_height == null && trial.maintain_aspect_ratio) {
+          height = img.naturalHeight * (trial.stimulus_width / img.naturalWidth);
+        }
+      } else if (!(trial.stimulus_height !== null && trial.maintain_aspect_ratio)) {
+        width = img.naturalWidth;
+      }
+      canvas.height = height;
+      canvas.width = width;
+    };
+
+    // Adjust the size of the canvas based on the image's aspect ratio
+    const getHeightWidthPost = () => {
+      if (trial.stimulus_height !== null) {
+        height = trial.stimulus_height;
+        if (trial.stimulus_width == null && trial.maintain_aspect_ratio) {
+          width = imgPost.naturalWidth * (trial.stimulus_height / imgPost.naturalHeight);
+        }
+      } else {
+        height = imgPost.naturalHeight;
+      }
+      if (trial.stimulus_width !== null) {
+        width = trial.stimulus_width;
+        if (trial.stimulus_height == null && trial.maintain_aspect_ratio) {
+          height = imgPost.naturalHeight * (trial.stimulus_width / imgPost.naturalWidth);
+        }
+      } else if (!(trial.stimulus_height !== null && trial.maintain_aspect_ratio)) {
+        width = imgPost.naturalWidth;
+      }
+      canvasPost.height = height;
+      canvasPost.width = width;
+    };
   }
 
   changeImageOnCanvas(trial, canvas: HTMLCanvasElement, newImageSrc: string) {
@@ -283,8 +491,13 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
     let triggered = false;
     let eventTime;
 
+    if (trial.dual_trial) {
+      this.renderImageOnCanvasDualTrial(trial, display_element);
+    }
+    else {
     var canvas = this.renderImageOnCanvas(trial, display_element);
-
+    }
+    
     // Get the existing canvas and its parent element
     let existingCanvas = display_element.querySelector('canvas');
     let parentElement = existingCanvas.parentElement;
@@ -297,15 +510,21 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
     parentElement.appendChild(newCanvas);
 
     // Set the size of the new canvas
-    newCanvas.width = existingCanvas.width + 400; // Adjust as needed
-    newCanvas.height = 200; // Adjust as needed
+    newCanvas.width = existingCanvas.width + trial.extra_width; // Adjust as needed
+    newCanvas.height = trial.feedback_height; // Adjust as needed
 
     // Center the new canvas
     newCanvas.style.display = 'block';
     newCanvas.style.margin = '0 auto';
 
     // Set the font size and style for the text
-    ctx.font = '30px Arial'; // Adjust as needed
+    if (trial.placeholder) {
+      ctx.font = '15px Arial'; // Adjust as needed
+    }
+    else {
+      ctx.font = '30px Arial'; // Adjust as needed
+    }
+    
     if (trial.visual_feedback == 'word') {
       ctx.textAlign = 'center';
     }
@@ -317,6 +536,19 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
     }
     ctx.textBaseline = 'middle';
 
+    if (trial.placeholder) {
+      ctx.fillStyle = 'grey';
+      if (trial.visual_feedback == 'word') {
+        ctx.fillText('Begin typing...', newCanvas.width / 2, newCanvas.height / 2); // Adjust the coordinates as needed
+      }
+      else if (trial.visual_feedback == 'whole') {
+        ctx.fillText('Begin typing...', 0, newCanvas.height / 2); // Adjust the coordinates as needed
+      }
+      else {
+        ctx.fillText('Begin typing...', newCanvas.width, newCanvas.height / 2); // Adjust the coordinates as needed
+      }
+    }
+
     // function to end trial when it is time
     const end_trial = () => {
       // kill any remaining setTimeout handlers
@@ -327,6 +559,8 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
         this.jsPsych.pluginAPI.cancelKeyboardResponse(keyboardListener);
       }
 
+      var minsTyped = (performance.now() - startTime) / 60000.0;
+
       words.push(buffer);
 
       // gather the data to store for the trial
@@ -334,7 +568,8 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
         responses,
         words,
         wholebuffer,
-        eventTime
+        eventTime,
+        minsTyped,
       };
 
       // clear the display
@@ -351,6 +586,7 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
       // Calculate the reaction time
       let rt = performance.now() - startTime;
       let key = info.key;
+      ctx.fillStyle = 'black';
       
       if (key == 'enter') {
         if (trial.trigger_end) {
@@ -407,13 +643,14 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
         rt: rt
       });
 
-      if (trial.trigger_list.includes(buffer)) {
+      if (trial.trigger_list.some(trigger => buffer.includes(trigger))) {
         // If the buffer is a trigger, change the image
         triggered = true;
       }
-
+      
       if (trial.visual_feedback == 'word') {
         // Update the typed text element with the current buffer
+        ctx.font = '30px Arial'; // Adjust as needed
         ctx.clearRect(0, 0, newCanvas.width, newCanvas.height);
         // Update the canvas with the current buffer
         ctx.fillText(buffer, newCanvas.width / 2, newCanvas.height / 2); // Adjust the coordinates as needed
@@ -421,6 +658,7 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
 
       if (trial.visual_feedback == 'whole') {
         // Update the typed text element with the current buffer
+        ctx.font = '30px Arial'; // Adjust as needed
         ctx.clearRect(0, 0, newCanvas.width, newCanvas.height);
         // Update the canvas with the current buffer
         ctx.fillText(wholebuffer, 0, newCanvas.height / 2); // Adjust the coordinates as needed
@@ -428,6 +666,7 @@ class ImageKeyboardResponsePlugin implements JsPsychPlugin<Info> {
 
       if (trial.visual_feedback == 'long'){
         // Update the typed text element with the current buffer
+        ctx.font = '30px Arial'; // Adjust as needed
         ctx.clearRect(0, 0, newCanvas.width, newCanvas.height);
         // Update the canvas with the current buffer
         ctx.fillText(wholebuffer, newCanvas.width, newCanvas.height / 2); // Adjust the coordinates as needed
